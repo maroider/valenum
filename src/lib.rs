@@ -1,19 +1,14 @@
-#![allow(unused_imports, dead_code)]
-
 extern crate proc_macro;
 
-use std::{collections::HashMap, convert::TryFrom, iter::FromIterator};
-
-use proc_macro2::{Span, TokenStream};
-use quote::{quote, ToTokens};
+use proc_macro2::TokenStream;
+use quote::quote;
 use syn::{
     braced,
     parse::{Parse, ParseStream},
     parse_macro_input,
     punctuated::Punctuated,
     token::{self, Brace, Comma},
-    Abi, Arm, Attribute, Expr, ExprLit, ExprMatch, ExprPath, Fields, Ident, ItemEnum, Pat,
-    PatIdent, PatLit, Path, PathArguments, PathSegment, Token, Type, Variant, Visibility,
+    Abi, Attribute, ExprLit, Fields, Ident, Token, Variant, Visibility,
 };
 
 #[proc_macro]
@@ -138,11 +133,6 @@ fn valenum_from_enum_impl(val_enum: &ValEnum) -> TokenStream {
             }
         }
     }
-}
-
-#[derive(Debug)]
-struct ValEnumFromValEnumImpl {
-    tokens: TokenStream,
 }
 
 #[derive(Debug)]
