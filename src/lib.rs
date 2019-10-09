@@ -27,17 +27,22 @@ pub fn valenum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let from_val_impl = valenum_from_val_impl(&val_enum);
     let from_enum_impl = valenum_from_enum_impl(&val_enum);
 
+    let serde_impls = valenum_serde_impls(&val_enum);
+
     let vis = val_enum.visibility;
     let abi = val_enum.abi;
     let name = val_enum.name;
 
     let out = quote! {
+        #[derive(Clone, Copy)]
         #vis #abi enum #name {
             #variants
         }
 
         #from_val_impl
         #from_enum_impl
+
+        #serde_impls
     };
 
     out.into()
@@ -48,19 +53,20 @@ fn valenum_from_val_impl(val_enum: &ValEnum) -> TokenStream {
         .variants
         .iter()
         .map(|variant| {
+            let name = &val_enum.name;
             let variant_name = &variant.name;
             match &variant.fields {
                 Fields::Unit => {
                     let value = variant.value.as_ref().unwrap();
-                    quote! { #value =>  Self::#variant_name, }
+                    quote! { #value =>  #name::#variant_name, }
                 }
                 Fields::Unnamed(_) => {
-                    quote! { val => Self::#variant_name(val), }
+                    quote! { val => #name::#variant_name(val), }
                 }
                 Fields::Named(fields) => {
                     let field = fields.named.first().unwrap();
                     let field_name = field.ident.as_ref().unwrap();
-                    quote! { #field_name => Self::#variant_name { #field_name }, }
+                    quote! { #field_name => #name::#variant_name { #field_name }, }
                 }
             }
         })
@@ -80,8 +86,8 @@ fn valenum_from_val_impl(val_enum: &ValEnum) -> TokenStream {
 
     quote! {
         impl From<#ty> for #name {
-            fn from(val_enum: &#name) -> Self {
-                match val_enum {
+            fn from(val: #ty) -> Self {
+                match val {
                     #match_arms
                 }
             }
@@ -94,19 +100,20 @@ fn valenum_from_enum_impl(val_enum: &ValEnum) -> TokenStream {
         .variants
         .iter()
         .map(|variant| {
+            let name = &val_enum.name;
             let pattern = &variant.name;
             match &variant.fields {
                 Fields::Unit => {
                     let value = variant.value.as_ref().unwrap();
-                    quote! { Self::#pattern => #value, }
+                    quote! { #name::#pattern => #value, }
                 }
                 Fields::Unnamed(_) => {
-                    quote! { Self::#pattern(val)  => val, }
+                    quote! { #name::#pattern(val)  => val, }
                 }
                 Fields::Named(fields) => {
                     let field = fields.named.first().unwrap();
                     let field_name = field.ident.as_ref().unwrap();
-                    quote! { Self::#pattern { #field_name } => #field_name, }
+                    quote! { #name::#pattern { #field_name } => #field_name, }
                 }
             }
         })
@@ -126,10 +133,47 @@ fn valenum_from_enum_impl(val_enum: &ValEnum) -> TokenStream {
 
     quote! {
         impl From<#name> for #ty {
-            fn from(val_enum: &#name) -> Self {
+            fn from(val_enum: #name) -> Self {
                 match val_enum {
                     #match_arms
                 }
+            }
+        }
+    }
+}
+
+fn valenum_serde_impls(val_enum: &ValEnum) -> TokenStream {
+    let name = &val_enum.name;
+    let ty = &val_enum
+        .variants
+        .iter()
+        .find(|variant| variant.fields != Fields::Unit)
+        .unwrap()
+        .fields
+        .iter()
+        .nth(0)
+        .unwrap()
+        .ty;
+
+    quote! {
+        impl ::serde::Serialize for #name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: ::serde::Serializer,
+            {
+                use ::serde::Serialize;
+                #ty::from(*self).serialize(serializer)
+            }
+        }
+
+        impl<'de> ::serde::Deserialize<'de> for #name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: ::serde::Deserializer<'de>,
+            {
+                use ::serde::Deserialize;
+                let val = #ty::deserialize(deserializer)?;
+                Ok(Self::from(val))
             }
         }
     }
