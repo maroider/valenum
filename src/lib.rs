@@ -19,8 +19,9 @@ pub fn valenum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .variants
         .iter()
         .map(|variant| {
+            let attributes = &variant.attributes;
             let variant: Variant = variant.into();
-            quote! { #variant, }
+            quote! { #( #attributes )* #variant, }
         })
         .collect();
 
@@ -29,11 +30,13 @@ pub fn valenum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let serde_impls = valenum_serde_impls(&val_enum);
 
+    let attributes = val_enum.attributes;
     let vis = val_enum.visibility;
     let abi = val_enum.abi;
     let name = val_enum.name;
 
     let out = quote! {
+        #( #attributes )*
         #[derive(Clone, Copy)]
         #vis #abi enum #name {
             #variants
@@ -142,6 +145,7 @@ fn valenum_from_enum_impl(val_enum: &ValEnum) -> TokenStream {
     }
 }
 
+#[cfg(feature = "serde")]
 fn valenum_serde_impls(val_enum: &ValEnum) -> TokenStream {
     let name = &val_enum.name;
     let ty = &val_enum
@@ -177,6 +181,11 @@ fn valenum_serde_impls(val_enum: &ValEnum) -> TokenStream {
             }
         }
     }
+}
+
+#[cfg(not(feature = "serde"))]
+fn valenum_serde_impls(_: &ValEnum) -> TokenStream {
+    TokenStream::new()
 }
 
 #[derive(Debug)]
